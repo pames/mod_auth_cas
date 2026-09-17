@@ -516,10 +516,10 @@ START_TEST(getCASCookie_test) {
 END_TEST
 
 START_TEST(setCASCookie_test) {
-  const char *expected = "cookie_name=cookie_value;Path=/";
+  const char *expected = "cookie_name=cookie_value;Path=/; HttpOnly";
   const char *rv;
   fail_if (apr_table_get(request->err_headers_out, "Set-Cookie") != NULL);
-  setCASCookie(request, "cookie_name", "cookie_value", FALSE, CAS_SESSION_EXPIRE_SESSION_SCOPE_TIMEOUT);
+  setCASCookie(request, "cookie_name", "cookie_value", FALSE, CAS_SESSION_EXPIRE_SESSION_SCOPE_TIMEOUT, NULL, NULL);
   rv = apr_table_get(request->err_headers_out, "Set-Cookie");
   fail_unless(strcmp(rv, expected) == 0);
 
@@ -529,23 +529,23 @@ START_TEST(setCASCookie_test) {
 END_TEST
 
 START_TEST(setCASCookieExpiryNow_test) {
-	const char *expected = "cookie_name=cookie_value;Path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+	const char *expected = "cookie_name=cookie_value;Path=/; HttpOnly; expires=Thu, 01 Jan 1970 00:00:00 GMT";
 	const char *ernVal;
 
   fail_if (apr_table_get(request->err_headers_out, "Set-Cookie") != NULL);
-	setCASCookie(request, "cookie_name", "cookie_value", FALSE, CAS_SESSION_EXPIRE_COOKIE_NOW);
+	setCASCookie(request, "cookie_name", "cookie_value", FALSE, CAS_SESSION_EXPIRE_COOKIE_NOW, NULL, NULL);
 	ernVal = apr_table_get(request->err_headers_out, "Set-Cookie");
 	fail_unless(0 == strcmp(ernVal, expected), ernVal);
 }
 END_TEST
 
 START_TEST(setCASCookieExpiryFiveSeconds_test) {
-  const char *expected = "cookie_name=cookie_value;Path=/; expires=Thu, 01 Jan 1970 00:00:05 GMT";
+  const char *expected = "cookie_name=cookie_value;Path=/; HttpOnly; expires=Thu, 01 Jan 1970 00:00:05 GMT";
   const char *eeVal;
   apr_time_t fiveSecPastEpoch = 5000000;
 
   fail_if (apr_table_get(request->err_headers_out, "Set-Cookie") != NULL);
-  setCASCookie(request, "cookie_name", "cookie_value", FALSE, fiveSecPastEpoch);
+  setCASCookie(request, "cookie_name", "cookie_value", FALSE, fiveSecPastEpoch, NULL, NULL);
   eeVal = apr_table_get(request->err_headers_out, "Set-Cookie");
   fail_unless(0 == strcmp(eeVal, expected), eeVal);
 }
@@ -564,7 +564,7 @@ START_TEST(getCASCookie_empty_test) {
 END_TEST
 
 START_TEST(removeGatewayCookie_test) {
-  const char *expected = "MOD_CAS_G=TRUE;Secure;Path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+  const char *expected = "MOD_CAS_G=TRUE;Secure;Path=/; HttpOnly; expires=Thu, 01 Jan 1970 00:00:00 GMT";
   const char *ernVal;
   const char *response =
 	"<cas:serviceResponse xmlns:cas=\"http://www.yale.edu/tp/cas\">"
@@ -621,7 +621,7 @@ START_TEST(escapeString_test) {
    * output of python's urllib.quote(...).lower(), and replacing the remaining
    * '/' with %2f (it doesn't encode that for some reason.
    */
-  expected = "a%2bb%20c%3cd%3ee%22f%25g%7bh%7di%7cj%5ck%5el%7em%5bn%5do%60p"
+  expected = "a%2bb+c%3cd%3ee%22f%25g%7bh%7di%7cj%5ck%5el%7em%5bn%5do%60p"
              "%3bq%2fr%3fs%3at%40u%3dv%26w%23x";
   fail_unless(strcmp(rv, expected) == 0);
 }
@@ -1409,10 +1409,17 @@ void core_setup(void) {
   cas_cfg *cfg = NULL;
   cas_dir_cfg *d_cfg = NULL;
   apr_uri_t login;
-  request = (request_rec *) malloc(sizeof(request_rec));
+  /* Must be zeroed: ap_log_rerror() expands to a loglevel check that
+   * dereferences r->log whenever it is non-NULL, and core_setup does
+   * not set it. An indeterminate (malloc'd) value segfaults in the
+   * first ap_log_rerror() call of a test. */
+  request = (request_rec *) calloc(1, sizeof(request_rec));
 
   apr_pool_create(&pool, NULL);
   request->pool = pool;
+  /* Simulate an authenticated user; cas_check_authorization() declines
+   * with AUTHZ_DENIED_NO_USER when r->user is NULL. */
+  request->user = "good";
   /* set up the request */
   request->headers_in = apr_table_make(request->pool, 0);
   request->headers_out = apr_table_make(request->pool, 0);
@@ -1465,12 +1472,14 @@ void core_setup(void) {
 void core_teardown(void) {
   // created by various cookie test functions above
   apr_file_remove("/tmp/.metadata", request->pool);
-  apr_file_remove("/tmp/.md5", request->pool);
   /*
-   * TODO(pames): figure out why one of these cookie/file-related tests creates
-   * a /tmp/.md5 file in addition to the /tmp/.metadata file. and do the cleanup
-   * there?
+   * removeGatewayCookie_test and createCASCookie_test create a cache entry
+   * and a ticket -> cookie map file, named after the digest the
+   * ap_md5_binary stub returns (see ap_stubs.c); neither test cleans them
+   * up, and leftovers break later runs (writeCASCacheEntry uses APR_EXCL).
    */
+  apr_file_remove("/tmp/0123456789abcdef0123456789abcdef", request->pool);
+  apr_file_remove("/tmp/.0123456789abcdef0123456789abcdef", request->pool);
   apr_pool_destroy(request->pool);
   free(request);
 }
