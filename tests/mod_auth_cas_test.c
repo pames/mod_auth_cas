@@ -1,5 +1,9 @@
 #include <check.h>
+#include <limits.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <ftw.h>
+#include <sys/stat.h>
 
 #include <apr.h>
 #include <apr_file_io.h>
@@ -26,6 +30,17 @@ Suite *mod_auth_cas_suite(void);
 
 request_rec *request;
 apr_pool_t *pool;
+
+// Private ephemeral directory (mkdtemp()) serving as CASCookiePath
+static char test_tmpdir[PATH_MAX];
+
+static int test_tmpdir_remove_cb(const char *path, const struct stat *sb,
+                                 int typeflag, struct FTW *ftw) {
+  (void) sb;
+  (void) typeflag;
+  (void) ftw;
+  return remove(path);
+}
 
 /* Function prototypes to make gcc happy */
 int find_entries_in_list(void *rec, const char *key, const char *val);
@@ -577,7 +592,6 @@ START_TEST(removeGatewayCookie_test) {
   int rv;
   cas_cfg *c = ap_get_module_config(request->server->module_config,
                                     &auth_cas_module);
-  c->CASCookiePath = "/tmp/";
 
   /*
    * setup request as if we've just returned from a gateway trip,
@@ -656,7 +670,6 @@ START_TEST(readCASCacheFile_test) {
   cas_cfg *c = ap_get_module_config(request->server->module_config,
                                     &auth_cas_module);
 
-  c->CASCookiePath = "/tmp/";
   path = apr_pstrcat(request->pool, c->CASCookiePath, fname, NULL);
   apr_file_open(&f, path, APR_CREATE|APR_WRITE|APR_TRUNCATE, APR_OS_DEFAULT,
                 request->pool);
@@ -691,7 +704,6 @@ START_TEST(writeCASCacheEntry_test) {
   char *fname = "fedcba9876543210fedcba9876543210", *path;
   cas_cfg *c = ap_get_module_config(request->server->module_config,
                                     &auth_cas_module);
-  c->CASCookiePath = "/tmp/";
 
   cache.user = "foo";
   cache.issued = 86400;
@@ -718,7 +730,6 @@ START_TEST(createCASCookie_test) {
   char *ticket = "ST-ABCD";
   cas_cfg *c = ap_get_module_config(request->server->module_config,
                                     &auth_cas_module);
-  c->CASCookiePath = "/tmp/";
 
   /* TODO(pames): const */
   rv = createCASCookie(request, "foo", NULL, ticket);
@@ -1482,6 +1493,21 @@ void core_setup(void) {
   auth_cas_module.module_index = kIdx;
   cfg = cas_create_server_config(request->pool, request->server);
   cfg->CASDebug = TRUE;
+
+  /*
+   * Back all cookie/cache file tests with a private mkdtemp()
+   * directory rather than the shared /tmp.
+   */
+  {
+    const char *base = getenv("TMPDIR");
+    if (base == NULL || *base == '\0')
+      base = "/tmp";
+    snprintf(test_tmpdir, sizeof(test_tmpdir),
+             "%s/mod_auth_cas_test.XXXXXX", base);
+    if (mkdtemp(test_tmpdir) == NULL)
+      fail();
+    cfg->CASCookiePath = apr_pstrcat(request->pool, test_tmpdir, "/", NULL);
+  }
   memset(&login, 0, sizeof(login));
   login.scheme = "https";
   login.hostname = "login.example.com";
@@ -1502,16 +1528,10 @@ void core_setup(void) {
 }
 
 void core_teardown(void) {
-  // created by various cookie test functions above
-  apr_file_remove("/tmp/.metadata", request->pool);
-  /*
-   * removeGatewayCookie_test and createCASCookie_test create a cache entry
-   * and a ticket -> cookie map file, named after the digest the
-   * ap_md5_binary stub returns (see ap_stubs.c); neither test cleans them
-   * up, and leftovers break later runs (writeCASCacheEntry uses APR_EXCL).
-   */
-  apr_file_remove("/tmp/0123456789abcdef0123456789abcdef", request->pool);
-  apr_file_remove("/tmp/.0123456789abcdef0123456789abcdef", request->pool);
+  if (test_tmpdir[0] != '\0') {
+    nftw(test_tmpdir, test_tmpdir_remove_cb, 20, FTW_DEPTH | FTW_PHYS);
+    test_tmpdir[0] = '\0';
+  }
   apr_pool_destroy(request->pool);
   free(request);
 }
