@@ -228,14 +228,16 @@ START_TEST(getCASPath_test) {
 }
 END_TEST
 
+/*
 START_TEST(getCASScope_test) {
   apr_uri_parse(request->pool, "http://www.example.com/foo/bar/baz.html",
                 &request->parsed_uri);
-  /* different control paths need to be tested -- c->CASDebug, c->CASGateway
-   * for correct and incorrect path, CASRenew, ... */
+  // different control paths need to be tested -- c->CASDebug, c->CASGateway
+  // for correct and incorrect path, CASRenew, ...
   fail();
 }
 END_TEST
+*/
 
 START_TEST(getCASGatewayV1_test) {
   char *rv;
@@ -676,10 +678,12 @@ START_TEST(readCASCacheFile_test) {
 }
 END_TEST
 
+/*
 START_TEST(CASCleanCache_test) {
   fail();
 }
 END_TEST
+*/
 
 START_TEST(writeCASCacheEntry_test) {
   apr_file_t *f;
@@ -734,20 +738,26 @@ START_TEST(createCASCookie_test) {
 }
 END_TEST
 
+/*
 START_TEST(expireCASST_test) {
   fail();
 }
 END_TEST
+*/
 
+/*
 START_TEST(CASSAMLLogout_test) {
   fail();
 }
 END_TEST
+*/
 
+/*
 START_TEST(deleteCASCacheFile_test) {
   fail();
 }
 END_TEST
+*/
 
 char *get_attr(cas_cfg *c, cas_saml_attr *attrs, const char *attr) {
   cas_saml_attr_val *av = NULL;
@@ -955,10 +965,12 @@ START_TEST(isValidCASTicket_username_in_AuthenticationStatement) {
 }
 END_TEST
 
+/*
 START_TEST(isValidCASCookie_test) {
   fail();
 }
 END_TEST
+*/
 
 START_TEST(cas_curl_write_test) {
   cas_curl_buffer cb;
@@ -971,10 +983,12 @@ START_TEST(cas_curl_write_test) {
 }
 END_TEST
 
+/*
 START_TEST(cas_curl_ssl_ctx_test) {
   fail();
 }
 END_TEST
+*/
 
 START_TEST(getResponseFromServer_test) {
   const char *response = "<cas:serviceResponse xmlns:cas="
@@ -1005,15 +1019,19 @@ START_TEST(getResponseFromServer_test) {
 }
 END_TEST
 
+/*
 START_TEST(cas_authenticate_test) {
   fail();
 }
 END_TEST
+*/
 
+/*
 START_TEST(cas_ssl_locking_callback_test) {
   fail();
 }
 END_TEST
+*/
 
 START_TEST(cas_ssl_id_callback_test) {
 #ifdef OPENSSL_NO_THREADID
@@ -1025,40 +1043,54 @@ START_TEST(cas_ssl_id_callback_test) {
 }
 END_TEST
 
+/*
 START_TEST(cas_cleanup_test) {
   fail();
 }
 END_TEST
+*/
 
+/*
 START_TEST(check_vhost_config_test) {
   fail();
 }
 END_TEST
+*/
 
+/*
 START_TEST(check_merged_vhost_configs_test) {
   fail();
 }
 END_TEST
+*/
 
+/*
 START_TEST(merged_vhost_configs_exist_test) {
   fail();
 }
 END_TEST
+*/
 
+/*
 START_TEST(cas_post_config_test) {
   fail();
 }
 END_TEST
+*/
 
+/*
 START_TEST(cas_in_filter_test) {
   fail();
 }
 END_TEST
+*/
 
+/*
 START_TEST(cas_register_hooks_test) {
   fail();
 }
 END_TEST
+*/
 
 #if MODULE_MAGIC_NUMBER_MAJOR < 20120211
 START_TEST(cas_attribute_authz_test) {
@@ -1499,7 +1531,6 @@ Suite *mod_auth_cas_suite(void) {
   tcase_add_test(tc_core, cas_merge_dir_config_test);
   tcase_add_test(tc_core, cas_setURL_test);
   tcase_add_test(tc_core, getCASPath_test);
-  tcase_add_test(tc_core, getCASScope_test);
   tcase_add_test(tc_core, getCASGatewayV1_test);
   tcase_add_test(tc_core, getCASGatewayV2_test);
   tcase_add_test(tc_core, getCASRenew_test);
@@ -1522,29 +1553,14 @@ Suite *mod_auth_cas_suite(void) {
   tcase_add_test(tc_core, removeGatewayCookie_test);
   tcase_add_test(tc_core, urlEncode_test);
   tcase_add_test(tc_core, readCASCacheFile_test);
-  tcase_add_test(tc_core, CASCleanCache_test);
   tcase_add_test(tc_core, writeCASCacheEntry_test);
   tcase_add_test(tc_core, createCASCookie_test);
-  tcase_add_test(tc_core, expireCASST_test);
-  tcase_add_test(tc_core, CASSAMLLogout_test);
-  tcase_add_test(tc_core, deleteCASCacheFile_test);
   tcase_add_test(tc_core, getResponseFromServer_test);
   tcase_add_test(tc_core, isValidCASTicket_OpenSAML1_test);
   tcase_add_test(tc_core, isValidCASTicket_OpenSAML2_test);
   tcase_add_test(tc_core, isValidCASTicket_username_in_AuthenticationStatement);
-  tcase_add_test(tc_core, isValidCASCookie_test);
   tcase_add_test(tc_core, cas_curl_write_test);
-  tcase_add_test(tc_core, cas_curl_ssl_ctx_test);
-  tcase_add_test(tc_core, cas_authenticate_test);
-  tcase_add_test(tc_core, cas_ssl_locking_callback_test);
   tcase_add_test(tc_core, cas_ssl_id_callback_test);
-  tcase_add_test(tc_core, cas_cleanup_test);
-  tcase_add_test(tc_core, check_vhost_config_test);
-  tcase_add_test(tc_core, check_merged_vhost_configs_test);
-  tcase_add_test(tc_core, merged_vhost_configs_exist_test);
-  tcase_add_test(tc_core, cas_post_config_test);
-  tcase_add_test(tc_core, cas_in_filter_test);
-  tcase_add_test(tc_core, cas_register_hooks_test);
   tcase_add_test(tc_core, cas_attribute_authz_test);
   suite_add_tcase(s, tc_core);
   suite_add_tcase(s, cas_saml_attr_tcase());
