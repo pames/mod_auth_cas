@@ -362,6 +362,23 @@ DISTBALL = ${DISTNAME}.tgz
 BASEFILES = src/mod_auth_cas.c src/mod_auth_cas.h src/Makefile.in configure.ac config.h.in Makefile.in README README.win32 NOTES
 DISTFILES = configure ${BASEFILES}
 SUBDIRS = src tests
+
+# --- Test coverage ---------------------------------------------------------
+# `make coverage` builds the module and unit tests with GCC coverage
+# instrumentation, runs the test suite through the normal `make check`,
+# and captures the results with lcov into coverage.info (a tracefile
+# ready for upload to Codecov) plus a browsable HTML report in
+# coverage_html/.
+#
+# If the tree is not configured with --enable-test-coverage, the target
+# cleans and reconfigures itself with that option (plus --with-check).
+# Note that the tree then remains instrumented until it is configured
+# again.  Requires lcov to be installed (genhtml ships with it).
+# System headers (/usr/*) are excluded from the report.
+# `make distclean` removes coverage.info and coverage_html/.
+COVERAGE_LCOV = lcov
+COVERAGE_GENHTML = genhtml
+COVERAGE_INFO = coverage.info
 all: config.h
 	$(MAKE) $(AM_MAKEFLAGS) all-recursive
 
@@ -761,7 +778,7 @@ distclean: distclean-recursive
 	-rm -f $(am__CONFIG_DISTCLEAN_FILES)
 	-rm -f Makefile
 distclean-am: clean-am distclean-generic distclean-hdr \
-	distclean-libtool distclean-tags
+	distclean-libtool distclean-local distclean-tags
 
 dvi: dvi-recursive
 
@@ -830,14 +847,14 @@ uninstall-am:
 	clean-libtool cscope cscopelist-am ctags ctags-am dist \
 	dist-all dist-bzip2 dist-gzip dist-lzip dist-shar dist-tarZ \
 	dist-xz dist-zip distcheck distclean distclean-generic \
-	distclean-hdr distclean-libtool distclean-tags distcleancheck \
-	distdir distuninstallcheck dvi dvi-am html html-am info \
-	info-am install install-am install-data install-data-am \
-	install-dvi install-dvi-am install-exec install-exec-am \
-	install-html install-html-am install-info install-info-am \
-	install-man install-pdf install-pdf-am install-ps \
-	install-ps-am install-strip installcheck installcheck-am \
-	installdirs installdirs-am maintainer-clean \
+	distclean-hdr distclean-libtool distclean-local distclean-tags \
+	distcleancheck distdir distuninstallcheck dvi dvi-am html \
+	html-am info info-am install install-am install-data \
+	install-data-am install-dvi install-dvi-am install-exec \
+	install-exec-am install-html install-html-am install-info \
+	install-info-am install-man install-pdf install-pdf-am \
+	install-ps install-ps-am install-strip installcheck \
+	installcheck-am installdirs installdirs-am maintainer-clean \
 	maintainer-clean-generic mostlyclean mostlyclean-generic \
 	mostlyclean-libtool pdf pdf-am ps ps-am tags tags-am uninstall \
 	uninstall-am
@@ -858,6 +875,31 @@ ${DISTBALL}:
 
 pretty:
 	cd src && $(MAKE) $@
+
+coverage:
+	@if [ -f config.status ] && grep -q '^ac_cs_config=.*--enable-test-coverage' config.status; then \
+	  echo "Coverage instrumentation already enabled in current configuration."; \
+	else \
+	  echo "Reconfiguring with coverage instrumentation (--enable-test-coverage)..."; \
+	  $(MAKE) clean; \
+	  ./configure --enable-test-coverage --with-check; \
+	fi
+	rm -f src/*.gcda tests/*.gcda
+	$(MAKE)
+	$(MAKE) check
+	$(COVERAGE_LCOV) --capture --directory . --output-file $(COVERAGE_INFO)
+	$(COVERAGE_LCOV) --remove $(COVERAGE_INFO) '/usr/*' --output-file $(COVERAGE_INFO)
+	-$(COVERAGE_LCOV) --list $(COVERAGE_INFO)
+	$(COVERAGE_GENHTML) $(COVERAGE_INFO) --output-directory coverage_html
+	@echo "Coverage tracefile: $(COVERAGE_INFO) (for Codecov upload)"
+	@echo "HTML report:        coverage_html/index.html"
+
+distclean-local: coverage-clean
+coverage-clean:
+	rm -f $(COVERAGE_INFO)
+	rm -rf coverage_html
+
+.PHONY: coverage coverage-clean
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.

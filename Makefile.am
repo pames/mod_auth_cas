@@ -28,3 +28,46 @@ ${DISTBALL}:
 
 pretty:
 	cd src && $(MAKE) $@
+
+# --- Test coverage ---------------------------------------------------------
+# `make coverage` builds the module and unit tests with GCC coverage
+# instrumentation, runs the test suite through the normal `make check`,
+# and captures the results with lcov into coverage.info (a tracefile
+# ready for upload to Codecov) plus a browsable HTML report in
+# coverage_html/.
+#
+# If the tree is not configured with --enable-test-coverage, the target
+# cleans and reconfigures itself with that option (plus --with-check).
+# Note that the tree then remains instrumented until it is configured
+# again.  Requires lcov to be installed (genhtml ships with it).
+# System headers (/usr/*) are excluded from the report.
+# `make distclean` removes coverage.info and coverage_html/.
+
+COVERAGE_LCOV    = lcov
+COVERAGE_GENHTML = genhtml
+COVERAGE_INFO    = coverage.info
+
+coverage:
+	@if [ -f config.status ] && grep -q '^ac_cs_config=.*--enable-test-coverage' config.status; then \
+	  echo "Coverage instrumentation already enabled in current configuration."; \
+	else \
+	  echo "Reconfiguring with coverage instrumentation (--enable-test-coverage)..."; \
+	  $(MAKE) clean; \
+	  ./configure --enable-test-coverage --with-check; \
+	fi
+	rm -f src/*.gcda tests/*.gcda
+	$(MAKE)
+	$(MAKE) check
+	$(COVERAGE_LCOV) --capture --directory . --output-file $(COVERAGE_INFO)
+	$(COVERAGE_LCOV) --remove $(COVERAGE_INFO) '/usr/*' --output-file $(COVERAGE_INFO)
+	-$(COVERAGE_LCOV) --list $(COVERAGE_INFO)
+	$(COVERAGE_GENHTML) $(COVERAGE_INFO) --output-directory coverage_html
+	@echo "Coverage tracefile: $(COVERAGE_INFO) (for Codecov upload)"
+	@echo "HTML report:        coverage_html/index.html"
+
+distclean-local: coverage-clean
+coverage-clean:
+	rm -f $(COVERAGE_INFO)
+	rm -rf coverage_html
+
+.PHONY: coverage coverage-clean

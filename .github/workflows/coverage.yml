@@ -1,0 +1,69 @@
+name: Coverage
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            apache2-dev \
+            build-essential \
+            check \
+            gcovr \
+            libapr1-dev \
+            libcurl4-openssl-dev \
+            libpcre2-dev \
+            libssl-dev \
+            lcov \
+            pkg-config
+
+      - name: Build and run coverage
+        run: |
+          ./configure --enable-test-coverage --with-check
+          make coverage
+
+      # Convert the gcov data to Cobertura XML, the format the
+      # CodeCoverageSummary action parses. Paths come out relative to
+      # the repo root (src/..., tests/...).
+      # libtool leaves orphan .gcno files in src/.libs/ (no matching
+      # .gcda) that gcovr >= 6 treats as fatal errors, so remove them
+      # first; the real coverage data is in src/ and tests/.
+      - name: Generate Cobertura XML
+        run: |
+          rm -f src/.libs/*.gcno src/.libs/*.gcda
+          gcovr --cobertura --object-directory src --object-directory tests -o coverage.xml
+
+      # Summarize the Cobertura XML in the workflow log (overall and
+      # per-package line/branch rates). fail_below_min stays at its
+      # default (false) so the summary reports without gating the build.
+      - name: Code Coverage Summary
+        uses: irongut/CodeCoverageSummary@v1.3.0
+        with:
+          filename: coverage.xml
+          format: markdown
+
+      # Zip the browsable HTML report so all of genhtml's assets
+      # (CSS, PNGs) travel with the pages, and upload it as an
+      # artifact downloadable from the run.
+      - name: Package HTML coverage report
+        run: zip -r coverage_html.zip coverage_html
+
+      - name: Upload HTML coverage report
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-report
+          path: coverage_html.zip
